@@ -65,6 +65,14 @@
 /* Private Prototypes *********************************************************/
 static void doNothing();
 
+static LineStateChangeNotificationFunc pLineStateChangeCallback = 0;
+
+void usbComRequestLineStateChangeNotification(LineStateChangeNotificationFunc pFunc)
+{
+	pLineStateChangeCallback = pFunc;
+}
+
+
 /* USB COM Variables **********************************************************/
 
 // TODO: look at usb-to-serial adapters and figure out good default values for usbComControlLineState (RTS and CTS)
@@ -125,20 +133,20 @@ USB_DESCRIPTOR_DEVICE CODE usbDeviceDescriptor =
 };
 
 CODE struct CONFIG1 {
-    USB_DESCRIPTOR_CONFIGURATION configuration;
+    struct USB_DESCRIPTOR_CONFIGURATION configuration;
 
-    USB_DESCRIPTOR_INTERFACE communication_interface;
+    struct USB_DESCRIPTOR_INTERFACE communication_interface;
     unsigned char class_specific[19];  // CDC-Specific Descriptors
-    USB_DESCRIPTOR_ENDPOINT notification_element;
+    struct USB_DESCRIPTOR_ENDPOINT notification_element;
 
-    USB_DESCRIPTOR_INTERFACE data_interface;
-    USB_DESCRIPTOR_ENDPOINT data_out;
-    USB_DESCRIPTOR_ENDPOINT data_in;
+    struct USB_DESCRIPTOR_INTERFACE data_interface;
+    struct USB_DESCRIPTOR_ENDPOINT data_out;
+    struct USB_DESCRIPTOR_ENDPOINT data_in;
 } usbConfigurationDescriptor
 =
 {
     {                                                    // Configuration Descriptor
-        sizeof(USB_DESCRIPTOR_CONFIGURATION),
+        sizeof(struct USB_DESCRIPTOR_CONFIGURATION),
         USB_DESCRIPTOR_TYPE_CONFIGURATION,
         sizeof(struct CONFIG1),                          // wTotalLength
         2,                                               // bNumInterfaces
@@ -148,7 +156,7 @@ CODE struct CONFIG1 {
         50,                                              // bMaxPower
     },
     {                                                    // Communications Interface: Used for device management.
-        sizeof(USB_DESCRIPTOR_INTERFACE),
+        sizeof(struct USB_DESCRIPTOR_INTERFACE),
         USB_DESCRIPTOR_TYPE_INTERFACE,
         CDC_CONTROL_INTERFACE_NUMBER,                    // bInterfaceNumber
         0,                                               // bAlternateSetting
@@ -185,7 +193,7 @@ CODE struct CONFIG1 {
         CDC_DATA_INTERFACE_NUMBER                        // index of the data interface
     },
     {
-        sizeof(USB_DESCRIPTOR_ENDPOINT),
+        sizeof(struct USB_DESCRIPTOR_ENDPOINT),
         USB_DESCRIPTOR_TYPE_ENDPOINT,
         USB_ENDPOINT_ADDRESS_IN | CDC_NOTIFICATION_ENDPOINT,  // bEndpointAddress
         USB_TRANSFER_TYPE_INTERRUPT,                     // bmAttributes
@@ -193,7 +201,7 @@ CODE struct CONFIG1 {
         1,                                               // bInterval
     },
     {
-        sizeof(USB_DESCRIPTOR_INTERFACE),         // Data Interface: used for RX and TX data.
+        sizeof(struct USB_DESCRIPTOR_INTERFACE),         // Data Interface: used for RX and TX data.
         USB_DESCRIPTOR_TYPE_INTERFACE,
         CDC_DATA_INTERFACE_NUMBER,                       // bInterfaceNumber
         0,                                               // bAlternateSetting
@@ -204,7 +212,7 @@ CODE struct CONFIG1 {
         0                                                // iInterface
     },
     {                                                    // OUT Endpoint: Sends data out to Wixel.
-        sizeof(USB_DESCRIPTOR_ENDPOINT),
+        sizeof(struct USB_DESCRIPTOR_ENDPOINT),
         USB_DESCRIPTOR_TYPE_ENDPOINT,
         USB_ENDPOINT_ADDRESS_OUT | CDC_DATA_ENDPOINT,    // bEndpointAddress
         USB_TRANSFER_TYPE_BULK,                          // bmAttributes
@@ -212,7 +220,7 @@ CODE struct CONFIG1 {
         0,                                               // bInterval
     },
     {
-        sizeof(USB_DESCRIPTOR_ENDPOINT),
+        sizeof(struct USB_DESCRIPTOR_ENDPOINT),
         USB_DESCRIPTOR_TYPE_ENDPOINT,
         USB_ENDPOINT_ADDRESS_IN | CDC_DATA_ENDPOINT,     // bEndpointAddress
         USB_TRANSFER_TYPE_BULK,                          // bmAttributes
@@ -264,8 +272,13 @@ void usbCallbackSetupHandler()
         case ACM_REQUEST_SET_CONTROL_LINE_STATE:                   // SetControlLineState (USBPSTN1.20 Section 6.3.12 SetControlLineState)
             usbComControlLineState = usbSetupPacket.wValue;
             usbControlAcknowledge();
+
+			if(pLineStateChangeCallback)
+				pLineStateChangeCallback(usbComControlLineState);
+
             break;
     }
+
 }
 
 void usbCallbackClassDescriptorHandler(void)
@@ -286,9 +299,7 @@ void usbCallbackControlWriteHandler()
     {
         // The baud rate has been set to 333.  That is the special signal
         // sent by the USB host telling us to enter bootloader mode.
-
-        startBootloaderSoon = 1;
-        startBootloaderRequestTime = (uint8)getMs();
+		requestBootloaderSoon();
     }
 }
 
@@ -340,7 +351,7 @@ uint8 usbComRxReceiveByte()
 
 // Assumption: The user has previously called usbComRxAvailable and its return value
 // was greater than or equal to size.
-void usbComRxReceive(uint8 XDATA * buffer, uint8 size)
+void usbComRxReceive(uint8 XDATA* buffer, uint8 size)
 {
     usbReadFifo(CDC_DATA_ENDPOINT, size, buffer);
 
@@ -368,6 +379,12 @@ static void sendPacketNow()
 
     // Notify the USB library that some activity has occurred.
     usbActivityFlag = 1;
+}
+
+void requestBootloaderSoon()
+{
+	startBootloaderSoon = 1;
+	startBootloaderRequestTime = (uint8)getMs();
 }
 
 void usbComService(void)

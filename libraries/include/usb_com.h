@@ -11,6 +11,8 @@
 
 typedef void (HandlerFunction)(void);
 
+typedef void (*LineStateChangeNotificationFunc)(uint8 state);
+
 /*! This function returns the current state of the virtual
  * RTS and DTR control lines.
  * The states of these lines are controlled by the USB Host.
@@ -131,7 +133,7 @@ uint8 usbComRxReceiveByte(void);
  * usbComRxAvailable().
  *
  * See also usbComRxReceiveByte(). */
-void usbComRxReceive(uint8 XDATA * buffer, uint8 size);
+void usbComRxReceive(const uint8 XDATA * buffer, uint8 size);
 
 /*! \return The number of bytes available in the TX buffers.
  *
@@ -160,5 +162,11 @@ void usbComTxSendByte(uint8 byte);
  * function and be sure not to add too many bytes to the buffer.
  * The \p size parameter should not exceed the last value returned by usbComTxAvailable(). */
 void usbComTxSend(const uint8 XDATA * buffer, uint8 size);
+
+/* used to request the system to go into bootloader mode soon.  This is so we can do this from
+ * protocol  */
+void requestBootloaderSoon();
+
+void usbComRequestLineStateChangeNotification(LineStateChangeNotificationFunc pFunc);
 
 #endif

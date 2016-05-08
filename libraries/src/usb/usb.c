@@ -8,7 +8,7 @@
 
 extern uint8 CODE usbConfigurationDescriptor[];
 
-static void usbStandardDeviceRequestHandler();
+void usbStandardDeviceRequestHandler();
 
 #define CONTROL_TRANSFER_STATE_NONE  0
 #define CONTROL_TRANSFER_STATE_WRITE 1
@@ -58,7 +58,7 @@ void usbWriteFifo(uint8 endpointNumber, uint8 count, const uint8 XDATA * buffer)
 
 // Performs some basic tasks that should be done after USB is connected and after every
 // Reset interrupt.
-static void basicUsbInit()
+void basicUsbInit()
 {
     usbSuspendMode = 0;
 
@@ -223,12 +223,6 @@ void usbPoll()
 
                 USBINDEX = 0;  // Select EP0 again because the functions above might have changed USBINDEX.
 
-                // Modify the count so that we don't send more data than the host requested.
-                if(controlTransferBytesLeft > usbSetupPacket.wLength)
-                {
-                    controlTransferBytesLeft = usbSetupPacket.wLength;
-                }
-
                 // Prepare for the first transaction after the SETUP packet.
                 if (controlTransferState == CONTROL_TRANSFER_STATE_NONE)
                 {
@@ -342,11 +336,7 @@ static void usbStandardDeviceRequestHandler()
                 {
                     if ((usbSetupPacket.wValue & 0xFF) >= usbStringDescriptorCount)
                     {
-                        // This is either an invalid string index or it is 0xEE,
-                        // which is defined by Microsoft OS Descriptors 1.0.
-                        // This library provides no features for handling such requests,
-                        // but we call the user's callback in case they want to.
-                        usbCallbackClassDescriptorHandler();
+                        // Invalid string index.
                         return;
                     }
 
@@ -366,6 +356,14 @@ static void usbStandardDeviceRequestHandler()
                     }
                     break;
                 }
+            }
+
+            // Modify the count so that we don't send more data than the host requested.
+            // We MUST use the local variable wLength instead of usbSetupPacket.wLength because
+            // USB_SETUP_PACKET may have been over-written by the serial number handler.
+            if(controlTransferBytesLeft > usbSetupPacket.wLength)
+            {
+                controlTransferBytesLeft = usbSetupPacket.wLength;
             }
 
             controlTransferState = CONTROL_TRANSFER_STATE_READ;
