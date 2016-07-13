@@ -37,12 +37,14 @@ radio_channel: See description in radio_link.h.
 #include <uart0.h>
 #include <gpio.h>
 
-static volatile BIT do_sleep = 1;
+static volatile BIT do_sleep = 0;
 static volatile BIT is_sleeping = 0;
 static volatile BIT do_verbose = 0;
 static volatile BIT do_binary = 0;
 static volatile int start_channel = 0;
 static volatile BIT do_close_usb = 1;
+
+static volatile uint32 last_packet = -285000;
 
 // forward prototypes
 int doServices(uint8 bWithProtocol);
@@ -126,7 +128,7 @@ void LoadRFParam(unsigned char XDATA* addr, uint8 default_val)
 void dex_RadioSettings()
 {
     // Transmit power: one of the highest settings, but not the highest.
-    LoadRFParam(&PA_TABLE0, 0x00);
+    LoadRFParam(&PA_TABLE0, 0x00);  //??????????????????????????? FE
 
     // Set the center frequency of channel 0 to 2403.47 MHz.
     // Freq = 24/2^16*(0xFREQ) = 2403.47 MHz
@@ -354,7 +356,7 @@ void goToSleep (uint16 seconds) {
 	is_sleeping = 1;
 }
 
-void updateLeds()
+void updateLedsold()
 {
 	if (do_sleep)
 	{
@@ -371,6 +373,19 @@ void updateLeds()
 //	LED_YELLOW(radioQueueRxCurrentPacket());
 //	LED_RED(0);
 }
+
+void updateLeds()
+{
+	if(getMs() - last_packet > 285000)
+	{
+		LED_GREEN((getMs()&0x00000380) == 0x80);
+	} else {
+		LED_GREEN(0);
+	}
+
+}
+
+
 
 // This is called by printf and printPacket.
 void putchar(char c)
@@ -479,7 +494,10 @@ void print_packet(Dexcom_packet* pPkt)
 	{
 		char srcAddr[6];
 		dexcom_src_to_ascii(pPkt->src_addr, srcAddr);
-		printf("%s %lu %lu %hhu %hhi %hhu\r\n", srcAddr, dex_num_decoder(pPkt->raw), 2 * dex_num_decoder(pPkt->filtered), pPkt->battery, getPacketRSSI(pPkt), txid);
+		// WARNING this is snir only code !!!
+//		if(!strcmp(srcAddr,"63EWA")) {
+			printf("%s %lu %lu %hhu %hhi %hhu\r\n", srcAddr, dex_num_decoder(pPkt->raw), 2 * dex_num_decoder(pPkt->filtered), pPkt->battery, getPacketRSSI(pPkt), txid);
+//		}
 	}
 }
 
@@ -852,6 +870,7 @@ void main()
 
 		// ok, we got a packet
 		print_packet(&Pkt);
+		last_packet = getMs();
 			
 		// can't safely sleep if we didn't get a packet!
 		if (do_sleep)
@@ -889,6 +908,17 @@ void main()
 			// watchdog mode??? this will do a reset?
 			//			WDCTL=0x0B;
 			// delayMs(50);    //wait for reset
+		} else {
+			LED_RED(1);
+			LED_YELLOW(1);
+			LED_GREEN(1);
+			delayMs(80);
+
+			doServices(1);
+
+			LED_RED(0);
+			LED_YELLOW(0);
+			LED_GREEN(0);
 		}
 	}
 }
