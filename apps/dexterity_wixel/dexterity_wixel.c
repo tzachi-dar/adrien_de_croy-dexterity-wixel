@@ -390,6 +390,9 @@ void updateLeds()
 // This is called by printf and printPacket.
 void putchar(char c)
 {
+    if(usbComTxAvailable()==0) {
+        return;
+    }
     usbComTxSendByte(c);
 }
 
@@ -768,7 +771,7 @@ int WaitForPacket(uint32 milliseconds, Dexcom_packet* pkt, uint8 channel)
     swap_channel(nChannels[channel], fOffset[channel]);
 
     if(do_verbose)
-        printf("[%lu] starting wait for packet on channel %d(%d) - will wait for %lu ms until [%lu] \r\n", start, channel, (int)CHANNR, milliseconds, start + milliseconds);
+        printf("USB:[%lu] starting wait for packet on channel %d(%d) - will wait for %lu ms until [%lu] \r\n", start, channel, (int)CHANNR, milliseconds, start + milliseconds);
 
     while (!milliseconds || (getMs() - start) < milliseconds)
     {
@@ -785,7 +788,7 @@ int WaitForPacket(uint32 milliseconds, Dexcom_packet* pkt, uint8 channel)
                 // there's a packet!
                 memcpy(pkt, packet, min8(len+2, sizeof(Dexcom_packet))); // +2 because we append RSSI and LQI to packet buffer, which isn't shown in len
                 if(do_verbose)
-                    printf("[%lu] received packet channel %d(%d) RSSI %d offset %02X bytes %hhu\r\n", getMs(), channel, (int)CHANNR, getPacketRSSI(pkt), fOffset[channel], len);
+                    printf("USB:[%lu] received packet channel %d(%d) RSSI %d offset %02X bytes %hhu\r\n", getMs(), channel, (int)CHANNR, getPacketRSSI(pkt), fOffset[channel], len);
                 nRet = 1;
                 // subtract channel index from transaction ID.  This normalises it so the same transaction id is for all transmissions of a same packet
                 // and makes masking the last 2 bits safe regardless of which channel the packet was acquired on
@@ -795,7 +798,7 @@ int WaitForPacket(uint32 milliseconds, Dexcom_packet* pkt, uint8 channel)
             {
                 nRet = 2;
                 if(do_verbose)
-                    printf("[%lu] CRC failure channel %d(%d) RSSI %d %hhu bytes received\r\n", getMs(), channel, (int)CHANNR, (int)((int8)(RSSI))/2 - 73, len);
+                    printf("USB:[%lu] CRC failure channel %d(%d) RSSI %d %hhu bytes received\r\n", getMs(), channel, (int)CHANNR, (int)((int8)(RSSI))/2 - 73, len);
             }
             // pull the packet off the queue
             radioQueueRxDoneWithPacket();
@@ -804,7 +807,7 @@ int WaitForPacket(uint32 milliseconds, Dexcom_packet* pkt, uint8 channel)
     }
 
     if(do_verbose)
-        printf("[%lu] timed out waiting for packet on channel %d(%d)\r\n", getMs(), channel, (int)CHANNR);
+        printf("USB:[%lu] timed out waiting for packet on channel %d(%d)\r\n", getMs(), channel, (int)CHANNR);
     
     return nRet;
 }
@@ -843,9 +846,9 @@ int get_packet(Dexcom_packet* pPkt)
         switch(WaitForPacket(delay, pPkt, nChannel))
         {
             case 1:                             // got a packet that passed CRC
-                if(channel_0_timed_out) {
+                if(channel_0_timed_out && (packet_captured == 0)) {
                     if(do_verbose)
-                        printf("[%lu] YES GOT A PACKET AFTER BETTER WAITING %d(%d) \r\n", getMs(), nChannel, (int)CHANNR);
+                        printf("USB:[%lu] YES GOT A PACKET AFTER BETTER WAITING %d(%d) \r\n", getMs(), nChannel, (int)CHANNR);
                 }
                                 packet_captured++;
                                 last_packet = getMs() - nChannel * 500;
@@ -860,7 +863,7 @@ int get_packet(Dexcom_packet* pPkt)
             case -1:                            // cancelled by protocol on USB (e.g. start channel changed)
             {
                 if(do_verbose)
-                    printf("[%lu] wait for packet on channel %d(%d) abandoned\r\n", getMs(), nChannel, (int)CHANNR);
+                    printf("USB:[%lu] wait for packet on channel %d(%d) abandoned\r\n", getMs(), nChannel, (int)CHANNR);
                 break;
             }
         }
@@ -869,9 +872,9 @@ int get_packet(Dexcom_packet* pPkt)
     }
     if(do_verbose) {
         if(packet_captured) {
-            printf("[%lu] This packet was captured %d times\r\n", getMs(), (int)packet_captured);
+            printf("USB:[%lu] This packet was captured %d times\r\n", getMs(), (int)packet_captured);
         } else {
-            printf("[%lu] Missed a packet all togeather\r\n",getMs());
+            printf("USB:[%lu] Missed a packet on all channels\r\n",getMs());
         }
     }
     if(packet_captured) {
