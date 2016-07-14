@@ -37,9 +37,11 @@ radio_channel: See description in radio_link.h.
 #include <uart0.h>
 #include <gpio.h>
 
+#include "packets_gap_calculator.h"
+
 static volatile BIT do_sleep = 0;
 static volatile BIT is_sleeping = 0;
-static volatile BIT do_verbose = 1;
+volatile BIT do_verbose = 1;
 static volatile BIT do_binary = 0;
 static volatile int start_channel = 0;
 static volatile BIT do_close_usb = 1;
@@ -382,6 +384,7 @@ void updateLeds()
     } else {
         LED_GREEN(0);
     }
+    FlushLed(&g_PacketsGapCalculator);
 
 }
 
@@ -519,7 +522,7 @@ uint8 init_usb_command(t_usb_command* pCmd)
     return 0;
 }
 
-static t_usb_command usb_command;
+XDATA t_usb_command usb_command;
 
 int usb_command_is(char* command)
 {
@@ -812,18 +815,19 @@ int WaitForPacket(uint32 milliseconds, Dexcom_packet* pkt, uint8 channel)
     return nRet;
 }
 
-#define PACKET_WAIT  299200
+
 uint32 calculate_first_packet_delay(uint32 last_packet) {
+	XDATA uint32 interpacket_delay = GetInterpacketDelay(&g_PacketsGapCalculator);
     XDATA uint32 next_packet;
     XDATA uint32 now = getMs();
-    printf("last_packet = %lu\r\n", last_packet);
-    if(last_packet == 0) {
+    printf("last_packet = %lu interpacket_delay = %lu\r\n", last_packet, interpacket_delay);
+    if(last_packet == 0 || interpacket_delay == 0) {
         return 0;
     }
 
-    next_packet = last_packet + PACKET_WAIT; 
+    next_packet = last_packet + interpacket_delay; 
     while(next_packet < now ) { // This writing should pass maxinteger ??????
-        next_packet += PACKET_WAIT;
+        next_packet += interpacket_delay;
     }
     printf("next_packet = %lu (don't forget the 150)\r\n", next_packet);
 
@@ -850,8 +854,9 @@ int get_packet(Dexcom_packet* pPkt)
                     if(do_verbose)
                         printf("USB:[%lu] YES GOT A PACKET AFTER BETTER WAITING %d(%d) \r\n", getMs(), nChannel, (int)CHANNR);
                 }
-                                packet_captured++;
-                                last_packet = getMs() - nChannel * 500;
+				packet_captured++;
+				last_packet = getMs() - nChannel * 498;
+				PacketCaptured(&g_PacketsGapCalculator, nChannel);
                 break;
             case 0:                             // timed out
                 if(nChannel == 0) {
@@ -892,6 +897,7 @@ extern void basicUsbInit();
 
 void main()
 {   
+    Init(&g_PacketsGapCalculator);
     systemInit();
     usbInit();
     usbComRequestLineStateChangeNotification(LineStateChangeCallback);
