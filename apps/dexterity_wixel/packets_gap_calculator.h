@@ -30,7 +30,7 @@ struct PacketsGapCalculator {
 
 void Init(struct PacketsGapCalculator *pPacketsGapCalculator);
 
-void PacketCaptured(struct PacketsGapCalculator * this, int channel);
+void PacketCaptured(struct PacketsGapCalculator * this, int channel, uint32 now);
 
 uint32 GetInterpacketDelay(struct PacketsGapCalculator *this);
 

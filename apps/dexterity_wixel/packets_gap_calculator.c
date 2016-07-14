@@ -9,7 +9,7 @@
 #include <uart1.h>
 #include "packets_gap_calculator.h"
 
-extern volatile BIT do_verbose;
+static volatile BIT do_verbose = 1;
 
 uint32 dist32(uint32 a, uint32 b)
 {
@@ -19,23 +19,18 @@ uint32 dist32(uint32 a, uint32 b)
     return  b -a;
 }
 
-
-
-XDATA struct PacketsGapCalculator PacketsGapCalculator11;
-
-void Init(struct PacketsGapCalculator *pPacketsGapCalculator) {
-    memset(&PacketsGapCalculator11, 0, sizeof (struct PacketsGapCalculator) );
+void Init(struct PacketsGapCalculator *this) {
+    memset(this, 0, sizeof (struct PacketsGapCalculator) );
 //    pPacketsGapCalculator->error = 0;
 //    pPacketsGapCalculator->packet_captured = 0;
 }
 
-void PacketCaptured(struct PacketsGapCalculator * this, int channel) {
+void PacketCaptured(struct PacketsGapCalculator * this, int channel, uint32 now) {
 	XDATA uint32 gap;
-	XDATA uint32 now = getMs();
 	if(do_verbose)
 		printf("PacketsGapCalculator called\r\n");
 
-	if(PacketsGapCalculator11.packet_captured == NUM_PACKETS) {
+	if(this->packet_captured == NUM_PACKETS) {
 		if(do_verbose)
 			printf("PacketsGapCalculator already have enough packets\r\n");
 		return;
@@ -47,31 +42,31 @@ void PacketCaptured(struct PacketsGapCalculator * this, int channel) {
 		return;
 	}
 
-	if (PacketsGapCalculator11.last_0_packet == 0) {
-		PacketsGapCalculator11.last_0_packet = now;
+	if (this->last_0_packet == 0) {
+		this->last_0_packet = now;
 		if(do_verbose)
 			printf("PacketsGapCalculator updating last_0_packet\r\n");
 		return;
 	}
 
-	gap = now - PacketsGapCalculator11.last_0_packet;
+	gap = now - this->last_0_packet;
 
 	if (gap < 298000 || gap > 302000) {
 		if(do_verbose)
 			printf("PacketsGapCalculator wrong gap = %lu\r\n", gap);
-		PacketsGapCalculator11.last_0_packet = now;
+		this->last_0_packet = now;
 		return;
 	}
 
 	if(do_verbose)
 		printf("PacketsGapCalculator We have a valid packet to add to our db gap = %lu\r\n", gap);
 	
-	PacketsGapCalculator11.time_diffs[PacketsGapCalculator11.packet_captured] = gap;
-	PacketsGapCalculator11.packet_captured++;
-	PacketsGapCalculator11.last_0_packet = now;
+	this->time_diffs[this->packet_captured] = gap;
+	this->packet_captured++;
+	this->last_0_packet = now;
 
-	if(PacketsGapCalculator11.packet_captured == NUM_PACKETS) {
-		FinalizeCalculations(&PacketsGapCalculator11);
+	if(this->packet_captured == NUM_PACKETS) {
+		FinalizeCalculations(this);
 	}
 
 }
@@ -79,35 +74,35 @@ void PacketCaptured(struct PacketsGapCalculator * this, int channel) {
 void FinalizeCalculations(struct PacketsGapCalculator *this) {
 	// We have enough data, let's calculate average...
 	XDATA int i;
-	PacketsGapCalculator11.packets_gap = 0;
+	this->packets_gap = 0;
 	for (i = 0; i < NUM_PACKETS; i++) {
-		PacketsGapCalculator11.packets_gap += PacketsGapCalculator11.time_diffs[i];
+		this->packets_gap += this->time_diffs[i];
 	}
-	PacketsGapCalculator11.packets_gap = PacketsGapCalculator11.packets_gap / NUM_PACKETS;
+	this->packets_gap = this->packets_gap / NUM_PACKETS;
 
 	for (i = 0; i < NUM_PACKETS; i++) {
-		if(dist32(PacketsGapCalculator11.packets_gap , PacketsGapCalculator11.time_diffs[i]) > 50 ) {
+		if(dist32(this->packets_gap , this->time_diffs[i]) > 50 ) {
 			if(do_verbose)
-					printf("PacketsGapCalculator We have an error gap = %lu time_diff = %ly\r\n", PacketsGapCalculator11.packets_gap, PacketsGapCalculator11.time_diffs[i]);
-			PacketsGapCalculator11.error = 1;
+					printf("PacketsGapCalculator We have an error gap = %lu time_diff = %ly\r\n", this->packets_gap, this->time_diffs[i]);
+			this->error = 1;
 		}
 	}
 }
 
 uint32 GetInterpacketDelay(struct PacketsGapCalculator *this) {
-	if(PacketsGapCalculator11.error ) {
+	if(this->error ) {
 		if(do_verbose)
 			printf("PacketsGapCalculator error detected returning 0\r\n");
 		return 0;
 	}
-	if(PacketsGapCalculator11.packet_captured != NUM_PACKETS) {
+	if(this->packet_captured != NUM_PACKETS) {
 		if(do_verbose)
 			printf("PacketsGapCalculator not enough packets captured returning 0\r\n");
 		return 0;
 	}
 	if(do_verbose)
-		printf("PacketsGapCalculator returning %lu\r\n", PacketsGapCalculator11.packets_gap);
-	return PacketsGapCalculator11.packets_gap;
+		printf("PacketsGapCalculator returning %lu\r\n", this->packets_gap);
+	return this->packets_gap;
 }
 
 /*
@@ -117,11 +112,11 @@ uint32 GetInterpacketDelay(struct PacketsGapCalculator *this) {
  */
 void FlushLed(struct PacketsGapCalculator *this) {
 	
-	if(PacketsGapCalculator11.error ) {
+	if(this->error ) {
 		LED_YELLOW(1);
 		return;
 	}
-	if(PacketsGapCalculator11.packet_captured == NUM_PACKETS) {
+	if(this->packet_captured == NUM_PACKETS) {
 		LED_YELLOW(0);
 		return;
 	}
@@ -132,14 +127,19 @@ void FlushLed(struct PacketsGapCalculator *this) {
 			LED_YELLOW(1);
 			return;
 		}
-		if(PacketsGapCalculator11.packet_captured > 1 && now == 150){
+		if(this->packet_captured > 0 && now == 150){
 			LED_YELLOW(1);
 			return;
 		}
-		if(PacketsGapCalculator11.packet_captured > 2 && now == 225){
+		if(this->packet_captured > 1 && now == 225){
 			LED_YELLOW(1);
 			return;
 		}
+		if(this->packet_captured > 2 && now == 300){
+			LED_YELLOW(1);
+			return;
+		}
+
 		LED_YELLOW(0);
 	}
 }

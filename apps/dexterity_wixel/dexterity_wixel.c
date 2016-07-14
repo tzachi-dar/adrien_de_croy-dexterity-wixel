@@ -41,7 +41,7 @@ radio_channel: See description in radio_link.h.
 
 static volatile BIT do_sleep = 0;
 static volatile BIT is_sleeping = 0;
-volatile BIT do_verbose = 1;
+static volatile BIT do_verbose = 1;
 static volatile BIT do_binary = 0;
 static volatile int start_channel = 0;
 static volatile BIT do_close_usb = 1;
@@ -850,14 +850,17 @@ int get_packet(Dexcom_packet* pPkt)
         switch(WaitForPacket(delay, pPkt, nChannel))
         {
             case 1:                             // got a packet that passed CRC
+            {
+            	uint32 now = getMs();   	
                 if(channel_0_timed_out && (packet_captured == 0)) {
                     if(do_verbose)
                         printf("USB:[%lu] YES GOT A PACKET AFTER BETTER WAITING %d(%d) \r\n", getMs(), nChannel, (int)CHANNR);
                 }
 				packet_captured++;
-				last_packet = getMs() - nChannel * 498;
-				PacketCaptured(&g_PacketsGapCalculator, nChannel);
+				last_packet = now - nChannel * 498;
+				PacketCaptured(&g_PacketsGapCalculator, nChannel, now);
                 break;
+            }
             case 0:                             // timed out
                 if(nChannel == 0) {
                     channel_0_timed_out = 1;
