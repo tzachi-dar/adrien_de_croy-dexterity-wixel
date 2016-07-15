@@ -21,9 +21,26 @@ uint32 dist32(uint32 a, uint32 b)
 
 void Init(struct PacketsGapCalculator *this) {
     memset(this, 0, sizeof (struct PacketsGapCalculator) );
-//    pPacketsGapCalculator->error = 0;
-//    pPacketsGapCalculator->packet_captured = 0;
 }
+
+uint32 FixGap(uint32 BigGap) {
+	XDATA int count;
+	XDATA uint32 gap;
+	if(BigGap < 302000) {
+		// Not intersting to print,
+		return BigGap;
+	}
+	count = (BigGap + 150000) / 300000;
+	if(count > 10) {
+		// Packets are too far apart
+		return 0;
+	}
+	gap = BigGap / count;
+	if(do_verbose)
+		printf("PacketsGapCalculator FixGap returning %lu for input %lu count = %d\r\n", gap, BigGap, count);
+	return gap;
+}
+
 
 void PacketCaptured(struct PacketsGapCalculator * this, int channel, uint32 now) {
 	XDATA uint32 gap;
@@ -49,7 +66,7 @@ void PacketCaptured(struct PacketsGapCalculator * this, int channel, uint32 now)
 		return;
 	}
 
-	gap = now - this->last_0_packet;
+	gap = FixGap(now - this->last_0_packet);
 
 	if (gap < 298000 || gap > 302000) {
 		if(do_verbose)
@@ -81,7 +98,7 @@ void FinalizeCalculations(struct PacketsGapCalculator *this) {
 	this->packets_gap = this->packets_gap / NUM_PACKETS;
 
 	for (i = 0; i < NUM_PACKETS; i++) {
-		if(dist32(this->packets_gap , this->time_diffs[i]) > 50 ) {
+		if(dist32(this->packets_gap , this->time_diffs[i]) > 3 ) {
 			if(do_verbose)
 					printf("PacketsGapCalculator We have an error gap = %lu time_diff = %ly\r\n", this->packets_gap, this->time_diffs[i]);
 			this->error = 1;
