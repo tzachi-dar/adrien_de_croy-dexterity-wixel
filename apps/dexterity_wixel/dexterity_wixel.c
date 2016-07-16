@@ -378,13 +378,14 @@ void updateLedsold()
 
 void updateLeds()
 {
-    if(getMs() - last_packet > 285000)
+	XDATA uint32 now = getMs();
+    if(now - last_packet > 285000)
     {
-        LED_GREEN((getMs()&0x00000380) == 0x80);
+        LED_GREEN((now & 0x00000380) == 0x80);
     } else {
         LED_GREEN(0);
     }
-    FlushLed(&g_PacketsGapCalculator);
+    FlushLed(&g_PacketsGapCalculator, now);
 
 }
 
@@ -817,10 +818,12 @@ int WaitForPacket(uint32 milliseconds, Dexcom_packet* pkt, uint8 channel)
 
 
 uint32 calculate_first_packet_delay(uint32 last_packet) {
-	XDATA uint32 interpacket_delay = GetInterpacketDelay(&g_PacketsGapCalculator);
+	XDATA uint32 now = getMs();
+	XDATA uint32 interpacket_delay = GetInterpacketDelay(&g_PacketsGapCalculator, now);
     XDATA uint32 next_packet;
-    XDATA uint32 now = getMs();
-    printf("last_packet = %lu interpacket_delay = %lu\r\n", last_packet, interpacket_delay);
+    
+    if(do_verbose)
+    	printf("last_packet = %lu interpacket_delay = %lu\r\n", last_packet, interpacket_delay);
     if(last_packet == 0 || interpacket_delay == 0) {
         return 0;
     }
@@ -829,7 +832,8 @@ uint32 calculate_first_packet_delay(uint32 last_packet) {
     while(next_packet < now ) { // This writing should pass maxinteger ??????
         next_packet += interpacket_delay;
     }
-    printf("next_packet = %lu (don't forget the 150)\r\n", next_packet);
+    if(do_verbose)
+    	printf("next_packet = %lu (don't forget the 150)\r\n", next_packet);
 
     return next_packet - now + 150;
 }

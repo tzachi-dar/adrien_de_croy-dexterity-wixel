@@ -47,6 +47,7 @@ void PacketCaptured(struct PacketsGapCalculator * this, int channel, uint32 now)
 	if(do_verbose)
 		printf("PacketsGapCalculator called\r\n");
 
+	this->last_good_packet = now;
 	if(this->packet_captured == NUM_PACKETS) {
 		if(do_verbose)
 			printf("PacketsGapCalculator already have enough packets\r\n");
@@ -106,7 +107,24 @@ void FinalizeCalculations(struct PacketsGapCalculator *this) {
 	}
 }
 
-uint32 GetInterpacketDelay(struct PacketsGapCalculator *this) {
+int IsTooFar(XDATA struct PacketsGapCalculator *this, XDATA uint32 now) {
+
+    // Will start with one hour, and make it bigger once we see the leds working well
+	if(now - this->last_good_packet > 1 * 60 * 60 * 1000 ) {
+		return 1;
+	}
+	
+	return 0;
+}
+
+uint32 GetInterpacketDelay(XDATA struct PacketsGapCalculator *this, uint32 now) {
+
+	if(IsTooFar(this, now)) {
+		if(do_verbose)
+			printf("PacketsGapCalculator too much time without a packet captured, need to return 0\r\n");
+		return 0;
+	}
+
 	if(this->error ) {
 		if(do_verbose)
 			printf("PacketsGapCalculator error detected returning 0\r\n");
@@ -127,38 +145,44 @@ uint32 GetInterpacketDelay(struct PacketsGapCalculator *this) {
  * On error led is always on
  * when learning, blink the number of captured delayes
  */
-void FlushLed(struct PacketsGapCalculator *this) {
-	
+void FlushLed(XDATA struct PacketsGapCalculator *this, XDATA uint32 now) {
+	uint32 now_cycled = (now & 0x7ff) / 4 ;
+
 	if(this->error ) {
 		LED_YELLOW(1);
 		return;
 	}
+	
+	if(IsTooFar(this, now)) {
+		// Half a cycle will be on, half off
+		LED_YELLOW(now_cycled < 0x7ff / 8);
+		return;
+	}
+
 	if(this->packet_captured == NUM_PACKETS) {
 		LED_YELLOW(0);
 		return;
 	}
-	// Now we are counting... cycles of 2048 ms 
-	{
-		XDATA long now = (getMs() & 0x7ff) / 4 ;
-		if(now == 75) {
-			LED_YELLOW(1);
-			return;
-		}
-		if(this->packet_captured > 0 && now == 150){
-			LED_YELLOW(1);
-			return;
-		}
-		if(this->packet_captured > 1 && now == 225){
-			LED_YELLOW(1);
-			return;
-		}
-		if(this->packet_captured > 2 && now == 300){
-			LED_YELLOW(1);
-			return;
-		}
-
-		LED_YELLOW(0);
+	
+	// Now we are counting... cycles of 2048 ms (now_cycled was devided by 4)
+	if(now_cycled == 75) {
+		LED_YELLOW(1);
+		return;
 	}
+	if(this->packet_captured > 0 && now_cycled == 150){
+		LED_YELLOW(1);
+		return;
+	}
+	if(this->packet_captured > 1 && now_cycled == 225){
+		LED_YELLOW(1);
+		return;
+	}
+	if(this->packet_captured > 2 && now_cycled == 300){
+		LED_YELLOW(1);
+		return;
+	}
+
+	LED_YELLOW(0);
 }
 
 

@@ -1,7 +1,7 @@
 #ifndef TIMER_CALCULATOR
 #define TIMER_CALCULATOR
 
-#define NUM_PACKETS 3
+#define NUM_PACKETS 5
 
 
 /*
@@ -14,17 +14,14 @@
 
 struct PacketsGapCalculator {
 
-
 	uint32 packets_gap;
 	int error;
-
 
 	uint32 last_0_packet;
 	uint32 time_diffs[NUM_PACKETS];
     int packet_captured;
 
-
-
+    uint32 last_good_packet;
 
 };
 
@@ -32,14 +29,14 @@ void Init(struct PacketsGapCalculator *pPacketsGapCalculator);
 
 void PacketCaptured(struct PacketsGapCalculator * this, int channel, uint32 now);
 
-uint32 GetInterpacketDelay(struct PacketsGapCalculator *this);
+uint32 GetInterpacketDelay(XDATA struct PacketsGapCalculator *this, uint32 now);
 
 /*
  * When all is ok (and learning finished), yellow led is off
  * On error led is always on
  * when learning, blink the number of captured delayes
  */
-void FlushLed(struct PacketsGapCalculator *this);
+void FlushLed(XDATA struct PacketsGapCalculator *this, XDATA uint32 now);
 
 void FinalizeCalculations(struct PacketsGapCalculator *this);
 
