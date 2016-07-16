@@ -378,7 +378,7 @@ void updateLedsold()
 
 void updateLeds()
 {
-	XDATA uint32 now = getMs();
+    XDATA uint32 now = getMs();
     if(now - last_packet > 285000)
     {
         LED_GREEN((now & 0x00000380) == 0x80);
@@ -818,12 +818,12 @@ int WaitForPacket(uint32 milliseconds, Dexcom_packet* pkt, uint8 channel)
 
 
 uint32 calculate_first_packet_delay(uint32 last_packet) {
-	XDATA uint32 now = getMs();
-	XDATA uint32 interpacket_delay = GetInterpacketDelay(&g_PacketsGapCalculator, now);
+XDATA uint32 now = getMs();
+XDATA uint32 interpacket_delay = GetInterpacketDelay(&g_PacketsGapCalculator, now);
     XDATA uint32 next_packet;
     
     if(do_verbose)
-    	printf("last_packet = %lu interpacket_delay = %lu\r\n", last_packet, interpacket_delay);
+    printf("last_packet = %lu interpacket_delay = %lu\r\n", last_packet, interpacket_delay);
     if(last_packet == 0 || interpacket_delay == 0) {
         return 0;
     }
@@ -833,7 +833,7 @@ uint32 calculate_first_packet_delay(uint32 last_packet) {
         next_packet += interpacket_delay;
     }
     if(do_verbose)
-    	printf("next_packet = %lu (don't forget the 150)\r\n", next_packet);
+    printf("next_packet = %lu (don't forget the 150)\r\n", next_packet);
 
     return next_packet - now + 150;
 }
@@ -855,14 +855,14 @@ int get_packet(Dexcom_packet* pPkt)
         {
             case 1:                             // got a packet that passed CRC
             {
-            	uint32 now = getMs();   	
+                uint32 now = getMs();   
                 if(channel_0_timed_out && (packet_captured == 0)) {
                     if(do_verbose)
                         printf("USB:[%lu] YES GOT A PACKET AFTER BETTER WAITING %d(%d) \r\n", getMs(), nChannel, (int)CHANNR);
                 }
-				packet_captured++;
-				last_packet = now - nChannel * 498;
-				PacketCaptured(&g_PacketsGapCalculator, nChannel, now);
+                packet_captured++;
+                last_packet = now - nChannel * 498;
+                PacketCaptured(&g_PacketsGapCalculator, nChannel, now);
                 break;
             }
             case 0:                             // timed out

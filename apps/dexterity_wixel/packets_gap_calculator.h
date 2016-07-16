@@ -14,11 +14,11 @@
 
 struct PacketsGapCalculator {
 
-	uint32 packets_gap;
-	int error;
+uint32 packets_gap;
+int error;
 
-	uint32 last_0_packet;
-	uint32 time_diffs[NUM_PACKETS];
+uint32 last_0_packet;
+uint32 time_diffs[NUM_PACKETS];
     int packet_captured;
 
     uint32 last_good_packet;
