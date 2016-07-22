@@ -41,7 +41,7 @@ radio_channel: See description in radio_link.h.
 
 static volatile BIT do_sleep = 0;
 static volatile BIT is_sleeping = 0;
-static volatile BIT do_verbose = 1;
+static volatile BIT do_verbose = 0;
 static volatile BIT do_binary = 0;
 static volatile int start_channel = 0;
 static volatile BIT do_close_usb = 1;
@@ -59,6 +59,10 @@ int doServices(uint8 bWithProtocol);
 static uint8 fOffset[NUM_CHANNELS] = {0xCE,0xD5,0xE6,0xE5};
 static uint8 nChannels[NUM_CHANNELS] = { 0, 100, 199, 209 };
 
+#define TRANSMITER_ID_LEN 5
+XDATA char  TRANSMITER_ID[TRANSMITER_ID_LEN+1]; // extra 1 is for null termination
+
+XDATA uint8 g_OUTNUM = 1;// The number of times to print the output (workaround for some bug)
 
 // store RF config in FLASH, and retrieve it from here to put it in proper location (also incidentally in flash).
 // this allows persistent storage of RF params that will survive a restart of the wixel (although not a reload of wixel app obviously).
@@ -527,13 +531,32 @@ XDATA t_usb_command usb_command;
 
 int usb_command_is(char* command)
 {
-    uint8 len = strlen(command);
+    uint8 XDATA len = strlen(command);
     if(len != usb_command.nCurReadPos)
         return 0;
     return memcmp(command, usb_command.usbCommandBuffer, len)==0;
 }
 
-uint8 Hex1ToUint4(char c)
+struct begins_with {
+    char *param;
+    uint8 param_len;
+};
+
+int usb_command_begins_with(char command[], struct begins_with XDATA *ret)
+{
+    XDATA uint8 len = strlen(command);
+    if(len > usb_command.nCurReadPos)
+        return 0;
+    if (memcmp(command, usb_command.usbCommandBuffer, len)) {
+        return 0;
+    }
+    ret->param = usb_command.usbCommandBuffer+len;
+    ret->param_len = usb_command.nCurReadPos - len;
+    return 1;
+}
+
+
+uint8 Hex1ToUint4(XDATA char c)
 {
     if(c >= '0' && c <= '9')
         return c-'0';
@@ -544,9 +567,9 @@ uint8 Hex1ToUint4(char c)
     return 0;
 }
 
-uint8 Hex2ToUint8(char* c)
+XDATA uint8 Hex2ToUint8(XDATA char* c)
 {
-    uint8 r = 0;
+    XDATA uint8 r = 0;
     r += Hex1ToUint4(c[0]); r <<=4;
     r += Hex1ToUint4(c[1]);
     return r;
@@ -554,7 +577,7 @@ uint8 Hex2ToUint8(char* c)
 
 uint16 Hex4ToUint16(char* c)
 {
-    uint16 r = 0;
+    XDATA uint16 r = 0;
     r += Hex1ToUint4(c[0]); r <<=4;
     r += Hex1ToUint4(c[1]); r <<=4;
     r += Hex1ToUint4(c[2]); r <<=4;
@@ -569,11 +592,22 @@ int doUsbCommand()
 {
     if(usb_command_is("HELLO"))
     {
-        printf("OK WIXEL Dexterity 1.0\r\n");
+        printf("OK WIXEL Dexterity 1.1\r\n");
         printf("OK current tick %lu\r\n", getMs());
         printf("OK sleep mode is %s\r\n", (do_sleep)?"ON":"OFF");
         return 1;
     }
+    if(usb_command_is("HELP"))
+    {
+        printf("Important commands\r\n");
+        printf("  VERBOSEON - turn on debug\r\n");
+        printf("  VERBOSEOFF - turn off debug\r\n");
+        printf("  HELLO - get status\r\n");
+        printf("  TXID=A1234 - txid to listen to (without it will listen for all channels\r\n");
+        printf("  OUTNUM=4 - Output data 4 times (workaround for a bug)\r\n");
+        return 1;
+    }
+
     if(usb_command_is("BOOTLOADER"))
     {
         printf("OK entering bootloader mode\r\n");
@@ -662,12 +696,48 @@ int doUsbCommand()
         }
         return 1;
     }
-    if(usb_command_is("VERBOSE"))
+    if(usb_command_is("VERBOSEON"))
     {
         do_verbose = 1;
         printf("OK VERBOSE MODE ON\r\n");
         return 1;
     }
+    if(usb_command_is("VERBOSEOFF"))
+    {
+        do_verbose = 0;
+        printf("OK VERBOSE MODE OFF\r\n");
+        return 1;
+    }
+
+    {
+        XDATA struct begins_with params;
+       
+        if(usb_command_begins_with("TXID=", &params)) {
+            
+
+            if(params.param_len!=5) {
+                printf("ERROR bad parameter length (has to be 5)\r\n");
+                return 1;
+            }
+            memcpy(TRANSMITER_ID, params.param, TRANSMITER_ID_LEN);
+            TRANSMITER_ID[TRANSMITER_ID_LEN] = 0;
+            printf("txid was set to %s\r\n", TRANSMITER_ID);
+            return 1;
+        }
+        if(usb_command_begins_with("OUTNUM=", &params)) {
+            
+            if(params.param_len!=1) {
+                printf("ERROR number has to be single digit\r\n");
+                return 1;
+            }
+
+            g_OUTNUM = Hex1ToUint4(params.param[0]);
+            printf("OUTNUM was set to %d\r\n", g_OUTNUM);
+            return 1;
+        }
+
+    }
+
     if(usb_command_is("BINARY"))
     {
         do_binary = 1;
@@ -723,7 +793,7 @@ int usbControlProtocolService()
                     return nRet;
             }
         }
-        else if(usb_command.nCurReadPos < USB_COMMAND_MAXLEN)
+        else if(usb_command.nCurReadPos < USB_COMMAND_MAXLEN -1) // The extra 1 is for null termination...
         {
             usb_command.usbCommandBuffer[usb_command.nCurReadPos++]=b;
         }
