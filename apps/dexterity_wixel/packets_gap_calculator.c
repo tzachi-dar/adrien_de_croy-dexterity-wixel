@@ -9,7 +9,7 @@
 #include <uart1.h>
 #include "packets_gap_calculator.h"
 
-static volatile BIT do_verbose = 1;
+static volatile BIT do_verbose = 0;
 
 uint32 dist32(uint32 a, uint32 b)
 {
@@ -110,7 +110,7 @@ void FinalizeCalculations(struct PacketsGapCalculator *this) {
 int IsTooFar(XDATA struct PacketsGapCalculator *this, XDATA uint32 now) {
 
     // Will start with one hour, and make it bigger once we see the leds working well
-    if(now - this->last_good_packet > 1 * 60 * 60 * 1000 ) {
+    if(now - this->last_good_packet > 5ul * 60 * 60 * 1000 ) {
         return 1;
     }
     
