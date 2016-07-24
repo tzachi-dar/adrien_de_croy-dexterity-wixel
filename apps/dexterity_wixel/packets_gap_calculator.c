@@ -109,7 +109,6 @@ void FinalizeCalculations(struct PacketsGapCalculator *this) {
 
 int IsTooFar(XDATA struct PacketsGapCalculator *this, XDATA uint32 now) {
 
-    // Will start with one hour, and make it bigger once we see the leds working well
     if(now - this->last_good_packet > 5ul * 60 * 60 * 1000 ) {
         return 1;
     }
@@ -185,6 +184,19 @@ void FlushLed(XDATA struct PacketsGapCalculator *this, XDATA uint32 now) {
     LED_YELLOW(0);
 }
 
+void PrintStatus(struct PacketsGapCalculator *this) {
+    XDATA uint8 i;
+    printf("    packets_gap %lu\r\n", this->packets_gap);
+    printf("    error %hhu\r\n", this->error);
+    printf("    last_0_packet %lu\r\n", this->last_0_packet);
+    //printf("    packet_captured %hhu\r\n", this->packet_captured);
+    printf("    last_good_packet %lu\r\n", this->last_good_packet);
+    printf("    packets_gap %lu\r\n", this->packets_gap);
+    for(i = 0; i < this->packet_captured; i++) {
+        printf("    packets_diff %lu\r\n", this->time_diffs[i]);
+    }
+    
 
+}
 
 XDATA struct PacketsGapCalculator g_PacketsGapCalculator;

@@ -14,12 +14,13 @@
 
 struct PacketsGapCalculator {
 
-uint32 packets_gap;
-int error;
+    uint32 packets_gap;
+    uint8 error;
 
-uint32 last_0_packet;
-uint32 time_diffs[NUM_PACKETS];
-    int packet_captured;
+    uint32 last_0_packet;
+    uint8 packet_captured;
+    uint32 time_diffs[NUM_PACKETS];
+    
 
     uint32 last_good_packet;
 
@@ -39,6 +40,8 @@ uint32 GetInterpacketDelay(XDATA struct PacketsGapCalculator *this, uint32 now);
 void FlushLed(XDATA struct PacketsGapCalculator *this, XDATA uint32 now);
 
 void FinalizeCalculations(struct PacketsGapCalculator *this);
+
+void PrintStatus(struct PacketsGapCalculator *this);
 
 extern XDATA struct PacketsGapCalculator g_PacketsGapCalculator;
 

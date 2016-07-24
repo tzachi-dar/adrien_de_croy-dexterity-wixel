@@ -60,7 +60,8 @@ static uint8 fOffset[NUM_CHANNELS] = {0xCE,0xD5,0xE6,0xE5};
 static uint8 nChannels[NUM_CHANNELS] = { 0, 100, 199, 209 };
 
 #define TRANSMITER_ID_LEN 5
-XDATA char  TRANSMITER_ID[TRANSMITER_ID_LEN+1]; // extra 1 is for null termination
+XDATA char  g_transmiter_id[TRANSMITER_ID_LEN+1] = {
+    '0', '0', '0', '0', '0', '\0'}; // extra 1 is for null termination
 
 XDATA uint8 g_OUTNUM = 1;// The number of times to print the output (workaround for some bug)
 
@@ -505,10 +506,15 @@ void print_packet(Dexcom_packet* pPkt)
     {
         char srcAddr[6];
         dexcom_src_to_ascii(pPkt->src_addr, srcAddr);
-        // WARNING this is snir only code !!!
-//      if(!strcmp(srcAddr,"63EWA")) {
             printf("%s %lu %lu %hhu %hhi %hhu\r\n", srcAddr, dex_num_decoder(pPkt->raw), 2 * dex_num_decoder(pPkt->filtered), pPkt->battery, getPacketRSSI(pPkt), txid);
-//      }
+    }
+}
+
+void print_packets(Dexcom_packet* pPkt) {
+    uint8 i;
+
+    for (i = 0; i < g_OUTNUM; i++) {
+        print_packet(pPkt);
     }
 }
 
@@ -595,6 +601,8 @@ int doUsbCommand()
         printf("OK WIXEL Dexterity 1.1\r\n");
         printf("OK current tick %lu\r\n", getMs());
         printf("OK sleep mode is %s\r\n", (do_sleep)?"ON":"OFF");
+        printf("TXID is %s\r\n", g_transmiter_id);
+        PrintStatus(&g_PacketsGapCalculator);
         return 1;
     }
     if(usb_command_is("HELP"))
@@ -719,9 +727,9 @@ int doUsbCommand()
                 printf("ERROR bad parameter length (has to be 5)\r\n");
                 return 1;
             }
-            memcpy(TRANSMITER_ID, params.param, TRANSMITER_ID_LEN);
-            TRANSMITER_ID[TRANSMITER_ID_LEN] = 0;
-            printf("txid was set to %s\r\n", TRANSMITER_ID);
+            memcpy(g_transmiter_id, params.param, TRANSMITER_ID_LEN);
+            g_transmiter_id[TRANSMITER_ID_LEN] = 0;
+            printf("txid was set to %s\r\n", g_transmiter_id);
             return 1;
         }
         if(usb_command_begins_with("OUTNUM=", &params)) {
@@ -831,6 +839,25 @@ void swap_channel(uint8 channel, uint8 newFSCTRL0)
     RFST = 2;   //RX
 }
 
+
+uint8 is_valid(Dexcom_packet* pkt) {
+    XDATA char  EMPTY_TRANSMITER_ID[TRANSMITER_ID_LEN+1] = 
+        {'0', '0', '0', '0', '0', '/0'};
+    XDATA char srcAddr[6];
+    uint8 ret;
+    if(!memcmp(EMPTY_TRANSMITER_ID, g_transmiter_id, TRANSMITER_ID_LEN)) {
+        if(do_verbose)
+            printf("is_valid returning 1 bacause transmiter id is not set\r\n");
+        return 1;
+    }
+    
+    dexcom_src_to_ascii(pkt->src_addr, srcAddr);
+    ret =  !memcmp(srcAddr, g_transmiter_id, TRANSMITER_ID_LEN);
+    if(do_verbose)
+        printf("is_valid returning %hhu\r\n", ret);
+    return ret;
+}
+
 // channel is the channel index = 0...3
 int WaitForPacket(uint32 milliseconds, Dexcom_packet* pkt, uint8 channel)
 {
@@ -854,15 +881,22 @@ int WaitForPacket(uint32 milliseconds, Dexcom_packet* pkt, uint8 channel)
     
         if (packet = radioQueueRxCurrentPacket())
         {
-            uint8 len = packet[0];
+            XDATA uint8 len = packet[0];
+            XDATA uint8 correct_transmiter = 1;
 
             if(radioCrcPassed())
             {
                 fOffset[channel] += FREQEST;
                 // there's a packet!
                 memcpy(pkt, packet, min8(len+2, sizeof(Dexcom_packet))); // +2 because we append RSSI and LQI to packet buffer, which isn't shown in len
+                {
+                    XDATA char srcAddr[6];
+                    dexcom_src_to_ascii(pkt->src_addr, srcAddr);
+                    correct_transmiter = is_valid(pkt);
+                }
                 if(do_verbose)
-                    printf("USB:[%lu] received packet channel %d(%d) RSSI %d offset %02X bytes %hhu\r\n", getMs(), channel, (int)CHANNR, getPacketRSSI(pkt), fOffset[channel], len);
+                   // printf("USB:[%lu] received packet channel %d(%d) RSSI %d offset %02X bytes %hhu\r\n", getMs(), channel, (int)CHANNR, getPacketRSSI(pkt), fOffset[channel], len);
+                    printf("USB:[%lu] received packet channel %d RSSI %d\r\n", getMs(), channel, getPacketRSSI(pkt));
                 nRet = 1;
                 // subtract channel index from transaction ID.  This normalises it so the same transaction id is for all transmissions of a same packet
                 // and makes masking the last 2 bits safe regardless of which channel the packet was acquired on
@@ -876,6 +910,9 @@ int WaitForPacket(uint32 milliseconds, Dexcom_packet* pkt, uint8 channel)
             }
             // pull the packet off the queue
             radioQueueRxDoneWithPacket();
+            if(!correct_transmiter) {
+                continue;
+            }
             return nRet;
         }
     }
@@ -888,12 +925,12 @@ int WaitForPacket(uint32 milliseconds, Dexcom_packet* pkt, uint8 channel)
 
 
 uint32 calculate_first_packet_delay(uint32 last_packet) {
-XDATA uint32 now = getMs();
-XDATA uint32 interpacket_delay = GetInterpacketDelay(&g_PacketsGapCalculator, now);
+    XDATA uint32 now = getMs();
+    XDATA uint32 interpacket_delay = GetInterpacketDelay(&g_PacketsGapCalculator, now);
     XDATA uint32 next_packet;
     
     if(do_verbose)
-    printf("last_packet = %lu interpacket_delay = %lu\r\n", last_packet, interpacket_delay);
+        printf("last_packet = %lu interpacket_delay = %lu\r\n", last_packet, interpacket_delay);
     if(last_packet == 0 || interpacket_delay == 0) {
         return 0;
     }
@@ -999,7 +1036,7 @@ void main()
             continue;
 
         // ok, we got a packet
-        print_packet(&Pkt);
+        print_packets(&Pkt);
         last_packet = getMs();
             
         // can't safely sleep if we didn't get a packet!
