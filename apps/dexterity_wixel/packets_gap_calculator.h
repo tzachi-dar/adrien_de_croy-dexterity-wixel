@@ -2,6 +2,7 @@
 #define TIMER_CALCULATOR
 
 #define NUM_PACKETS 5
+#define HOURS_BEFORE_FALLBACK_TO_CHANNEL_0 8ul
 
 
 /*

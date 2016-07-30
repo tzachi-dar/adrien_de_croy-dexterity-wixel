@@ -92,7 +92,7 @@ void PacketCaptured(struct PacketsGapCalculator * this, int channel, uint32 now)
 void FinalizeCalculations(struct PacketsGapCalculator *this) {
     // We have enough data, let's calculate average...
     XDATA int i;
-    this->packets_gap = 0;
+    this->packets_gap = NUM_PACKETS / 2;
     for (i = 0; i < NUM_PACKETS; i++) {
         this->packets_gap += this->time_diffs[i];
     }
@@ -109,7 +109,7 @@ void FinalizeCalculations(struct PacketsGapCalculator *this) {
 
 int IsTooFar(XDATA struct PacketsGapCalculator *this, XDATA uint32 now) {
 
-    if(now - this->last_good_packet > 5ul * 60 * 60 * 1000 ) {
+    if(now - this->last_good_packet > HOURS_BEFORE_FALLBACK_TO_CHANNEL_0 * 60 * 60 * 1000 ) {
         return 1;
     }
     
@@ -124,7 +124,7 @@ uint32 GetInterpacketDelay(XDATA struct PacketsGapCalculator *this, uint32 now) 
         return 0;
     }
 
-    if(this->error ) {
+    if(this->error) {
         if(do_verbose)
             printf("PacketsGapCalculator error detected returning 0\r\n");
         return 0;

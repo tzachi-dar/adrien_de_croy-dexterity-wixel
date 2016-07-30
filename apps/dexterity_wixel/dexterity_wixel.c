@@ -46,7 +46,9 @@ static volatile BIT do_binary = 0;
 static volatile int start_channel = 0;
 static volatile BIT do_close_usb = 1;
 
-static volatile uint32 last_packet = -285000;
+static volatile uint32 g_last_packet = -292000;
+
+#define MAX_ULONG_2 2147483648 // 2^31
 
 // forward prototypes
 int doServices(uint8 bWithProtocol);
@@ -384,7 +386,7 @@ void updateLedsold()
 void updateLeds()
 {
     XDATA uint32 now = getMs();
-    if(now - last_packet > 285000)
+    if(now - g_last_packet > 292000)
     {
         LED_GREEN((now & 0x00000380) == 0x80);
     } else {
@@ -911,6 +913,7 @@ int WaitForPacket(uint32 milliseconds, Dexcom_packet* pkt, uint8 channel)
             // pull the packet off the queue
             radioQueueRxDoneWithPacket();
             if(!correct_transmiter) {
+                nRet = 0;
                 continue;
             }
             return nRet;
@@ -936,7 +939,7 @@ uint32 calculate_first_packet_delay(uint32 last_packet) {
     }
 
     next_packet = last_packet + interpacket_delay; 
-    while(next_packet < now ) { // This writing should pass maxinteger ??????
+    while(next_packet - now > MAX_ULONG_2 ) { // This writing should pass maxinteger
         next_packet += interpacket_delay;
     }
     if(do_verbose)
@@ -1037,7 +1040,7 @@ void main()
 
         // ok, we got a packet
         print_packets(&Pkt);
-        last_packet = getMs();
+        g_last_packet = getMs();
             
         // can't safely sleep if we didn't get a packet!
         if (do_sleep)
