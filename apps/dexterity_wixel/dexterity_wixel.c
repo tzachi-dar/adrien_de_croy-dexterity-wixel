@@ -861,7 +861,8 @@ uint8 is_valid(Dexcom_packet* pkt) {
 }
 
 // channel is the channel index = 0...3
-int WaitForPacket(uint32 milliseconds, Dexcom_packet* pkt, uint8 channel)
+int WaitForPacket(uint32 milliseconds, Dexcom_packet* pkt, uint8 channel, uint32 *p_packet_capture_time)
+__reentrant
 {
     uint32 start = getMs();
     uint8 XDATA * packet = 0;
@@ -883,8 +884,10 @@ int WaitForPacket(uint32 milliseconds, Dexcom_packet* pkt, uint8 channel)
     
         if (packet = radioQueueRxCurrentPacket())
         {
-            XDATA uint8 len = packet[0];
-            XDATA uint8 correct_transmiter = 1;
+            
+            uint8 len = packet[0];
+            uint8 correct_transmiter = 1;
+            *p_packet_capture_time = getMs();
 
             if(radioCrcPassed())
             {
@@ -892,7 +895,7 @@ int WaitForPacket(uint32 milliseconds, Dexcom_packet* pkt, uint8 channel)
                 // there's a packet!
                 memcpy(pkt, packet, min8(len+2, sizeof(Dexcom_packet))); // +2 because we append RSSI and LQI to packet buffer, which isn't shown in len
                 {
-                    XDATA char srcAddr[6];
+                    char srcAddr[6];
                     dexcom_src_to_ascii(pkt->src_addr, srcAddr);
                     correct_transmiter = is_valid(pkt);
                 }
@@ -931,7 +934,7 @@ uint32 calculate_first_packet_delay(uint32 last_packet) {
     XDATA uint32 now = getMs();
     XDATA uint32 interpacket_delay = GetInterpacketDelay(&g_PacketsGapCalculator, now);
     XDATA uint32 next_packet;
-    
+
     if(do_verbose)
         printf("last_packet = %lu interpacket_delay = %lu\r\n", last_packet, interpacket_delay);
     if(last_packet == 0 || interpacket_delay == 0) {
@@ -956,23 +959,23 @@ int get_packet(Dexcom_packet* pPkt)
     uint32 delay = calculate_first_packet_delay(last_packet);
     uint8 channel_0_timed_out = 0;
     XDATA uint8 packet_captured = 0;
+    uint32 packet_capture_time;
     
     // start channel is the channel we initially do our infinite wait on.
     for(nChannel = start_channel; nChannel < NUM_CHANNELS; nChannel++)
     {
-        // initial receive packet call blocks forever. 
-        switch(WaitForPacket(delay, pPkt, nChannel))
+        // initial receive packet call blocks forever.
+        switch(WaitForPacket(delay, pPkt, nChannel, &packet_capture_time))
         {
             case 1:                             // got a packet that passed CRC
             {
-                uint32 now = getMs();   
                 if(channel_0_timed_out && (packet_captured == 0)) {
                     if(do_verbose)
                         printf("USB:[%lu] YES GOT A PACKET AFTER BETTER WAITING %d(%d) \r\n", getMs(), nChannel, (int)CHANNR);
                 }
                 packet_captured++;
-                last_packet = now - nChannel * 498;
-                PacketCaptured(&g_PacketsGapCalculator, nChannel, now);
+                last_packet = packet_capture_time - nChannel * 498;
+                PacketCaptured(&g_PacketsGapCalculator, nChannel, packet_capture_time);
                 break;
             }
             case 0:                             // timed out
