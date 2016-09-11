@@ -48,12 +48,6 @@ void PacketCaptured(struct PacketsGapCalculator * this, int channel, uint32 now)
         printf("PacketsGapCalculator called\r\n");
 
     this->last_good_packet = now;
-    if(this->packet_captured == NUM_PACKETS) {
-        if(do_verbose)
-            printf("PacketsGapCalculator already have enough packets\r\n");
-        return;
-    }
-    
     if(channel != 0) {
         if(do_verbose)
             printf("PacketsGapCalculator called wrong channel\r\n");
@@ -69,6 +63,10 @@ void PacketCaptured(struct PacketsGapCalculator * this, int channel, uint32 now)
 
     gap = FixGap(now - this->last_0_packet);
 
+//    if(do_verbose)
+        printf("PacketsGapCalculator We have a valid packet to add to our db gap = %lu\r\n", gap);
+
+
     if (gap < 298000 || gap > 302000) {
         if(do_verbose)
             printf("PacketsGapCalculator wrong gap = %lu\r\n", gap);
@@ -76,12 +74,15 @@ void PacketCaptured(struct PacketsGapCalculator * this, int channel, uint32 now)
         return;
     }
 
-    if(do_verbose)
-        printf("PacketsGapCalculator We have a valid packet to add to our db gap = %lu\r\n", gap);
+    this->last_0_packet = now;
+    if(this->packet_captured == NUM_PACKETS) {
+        if(do_verbose)
+            printf("PacketsGapCalculator already have enough packets\r\n");
+        return;
+    }
     
     this->time_diffs[this->packet_captured] = gap;
     this->packet_captured++;
-    this->last_0_packet = now;
 
     if(this->packet_captured == NUM_PACKETS) {
         FinalizeCalculations(this);
@@ -90,21 +91,30 @@ void PacketCaptured(struct PacketsGapCalculator * this, int channel, uint32 now)
 }
 
 void FinalizeCalculations(struct PacketsGapCalculator *this) {
-    // We have enough data, let's calculate average...
-    XDATA int i;
-    this->packets_gap = NUM_PACKETS / 2;
-    for (i = 0; i < NUM_PACKETS; i++) {
-        this->packets_gap += this->time_diffs[i];
-    }
-    this->packets_gap = this->packets_gap / NUM_PACKETS;
+    // We have enough packets, if all are the same time, or only one ms difference,
+    // we have a good result.
+    // WARNING!!! The 2 variables below must not use XDATA 
+    uint32 min = this->time_diffs[0];
+    uint32 max = this->time_diffs[0];
+    XDATA uint32 i;
 
     for (i = 0; i < NUM_PACKETS; i++) {
-        if(dist32(this->packets_gap , this->time_diffs[i]) > 3 ) {
-            if(do_verbose)
-                    printf("PacketsGapCalculator We have an error gap = %lu time_diff = %ly\r\n", this->packets_gap, this->time_diffs[i]);
-            this->error = 1;
+        if(min > this->time_diffs[i]) {
+            min = this->time_diffs[i];
+        }
+        if(max < this->time_diffs[i]) {
+            max = this->time_diffs[i];
         }
     }
+    printf("min = %lu max = %lu\r\n", min, max);
+    if(min == max || (min+1) == max) {
+        this->packets_gap = max;
+        printf("We have a good average %lu\r\n", max);
+        return;
+    }
+    printf("We have recieved some bad value, so we will start again :-( \r\n");
+    Init(this);
+    
 }
 
 int IsTooFar(XDATA struct PacketsGapCalculator *this, XDATA uint32 now) {
