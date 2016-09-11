@@ -351,7 +351,8 @@ uint8 usbComRxReceiveByte()
 
 // Assumption: The user has previously called usbComRxAvailable and its return value
 // was greater than or equal to size.
-void usbComRxReceive(uint8 XDATA* buffer, uint8 size)
+// ?????????? const
+void usbComRxReceive(const uint8 XDATA* buffer, uint8 size)
 {
     usbReadFifo(CDC_DATA_ENDPOINT, size, buffer);
 

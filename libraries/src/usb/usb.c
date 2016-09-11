@@ -288,7 +288,8 @@ void usbPoll()
 // field set to STANDARD.  This function reads the SETUP packet and uses that to set the control
 // transfer state variables with all the information needed to respond to the request.
 // Assumption: controlTransferState is CONTROL_TRANSFER_STATE_NONE when this function is called.
-static void usbStandardDeviceRequestHandler()
+////////???????? static
+void usbStandardDeviceRequestHandler()
 {
     // Prepare a convenient two-byte buffer for sending 1 or 2 byte responses.
     static XDATA uint8 response[2];
